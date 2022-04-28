@@ -67,13 +67,6 @@ def calculate_p_values_parafac2(subjects):
     return p_values
 
 
-def calculate_frobenius_norm(true_cov, est_cov):
-    # true_cov and est_cov both have dimensions n_datasets x n_datasets x n_components
-    # return frobenius norm of difference for each component
-    return np.linalg.norm(np.abs(true_cov) - np.abs(est_cov), 'fro', axis=(0, 1)) / np.linalg.norm(
-        true_cov, 'fro', axis=(0, 1))
-
-
 def calculate_source_correlation(true_sources, estimated_sources):
     # sources are of dimensions n_components x n_voxels x n_datasets
     # return correlation for each component in each dataset
@@ -83,22 +76,6 @@ def calculate_source_correlation(true_sources, estimated_sources):
         for k in range(K):
             corr[c, k] = pearsonr(true_sources[c, :, k], estimated_sources[c, :, k])[0]
     return corr
-
-
-def calculate_performance_metrics(cov_true, cov_est, sources_true, sources_est, p_values_true,
-                                  p_values_est):
-    # difference of true and estimated covariance matrices
-    frob = calculate_frobenius_norm(cov_true, cov_est)
-
-    # correlation of true and estimated sources
-    corr = calculate_source_correlation(sources_true, sources_est)
-
-    # accuracy of true and estimated significant p-values
-    significant_true = p_values_true < 0.05
-    significant_est = p_values_est < 0.05
-    acc = np.sum(significant_est == significant_true, axis=1) / significant_true.shape[1]
-
-    return frob, corr, acc
 
 
 if __name__ == '__main__':
@@ -121,15 +98,11 @@ if __name__ == '__main__':
 
     p_true = []
 
-    frob_iva = []
     corr_iva = []
-    acc_iva = []
     t_iva = []
     p_iva = []
 
-    frob_parafac2 = []
     corr_parafac2 = []
-    acc_parafac2 = []
     t_parafac2 = []
     p_parafac2 = []
 
@@ -145,13 +118,8 @@ if __name__ == '__main__':
         cov_true = true_data['scv_cov']
         mixing_true = true_data['Ak']
         sources_true = true_data['S']
+
         p_values_true = calculate_p_values_iva(mixing_true)
-
-        # do not evaluate the current run if p-values are not significant for the first two
-        # components
-        if p_values_true[0, 0] >= 0.05 or p_values_true[2, 0] >= 0.05:
-            continue
-
         p_true.append(p_values_true)
 
         # iva
@@ -160,14 +128,12 @@ if __name__ == '__main__':
         mixing_iva = iva_results['A']
         sources_iva = iva_results['S']
         time_iva = iva_results['time']
+
         p_values_iva = calculate_p_values_iva(mixing_iva)
         p_iva.append(p_values_iva)
 
-        frob, corr, acc = calculate_performance_metrics(
-            cov_true, cov_iva, sources_true, sources_iva, p_values_true, p_values_iva)
-        frob_iva.append(frob)
+        corr = calculate_source_correlation(sources_true, sources_iva)
         corr_iva.append(corr)
-        acc_iva.append(acc)
         t_iva.append(time_iva)
 
         # parafac2
@@ -183,7 +149,7 @@ if __name__ == '__main__':
             voxels[idx, :, :] = P @ B
         cov_parafac2 = calculate_corrcoef(voxels.T)
 
-        # sort PARAFAC2 components using FMS / Tucker congruence_coefficient on voxels mode
+        # sort PARAFAC2 components using cosine similarity / congruence_coefficient on voxels mode
         sources_temp = np.moveaxis(sources_true, [0, 1, 2], [2, 1, 0])
         Btilde_true = np.reshape(sources_temp, (
             sources_temp.shape[0] * sources_temp.shape[1], sources_temp.shape[2]))
@@ -200,20 +166,14 @@ if __name__ == '__main__':
         # broadcast p values such that they can be used in the same way as IVA p values
         p_values_parafac2 = np.tile(p_values_parafac2[:, np.newaxis], p_values_true.shape[1])
 
-        # performance metrics
-        frob, corr, acc = calculate_performance_metrics(
-            cov_true, cov_parafac2, sources_true, voxels.T, p_values_true, p_values_parafac2)
-        frob_parafac2.append(frob)
+        corr = calculate_source_correlation(sources_true, voxels.T)
         corr_parafac2.append(corr)
-        acc_parafac2.append(acc)
         t_parafac2.append(time_parafac2)
 
     print(f'Save metrics as simulations/metrics_scenario_{scenario}.npy.')
     np.save(Path(Path(__file__).parent.parent,
                  f'simulations/metrics_scenario_{scenario}.npy'),
-            {'iva': {'frob': frob_iva, 'corr': corr_iva, 'acc': acc_iva, 'time': t_iva,
-                     'pvalues': p_iva},
-             'parafac2': {'frob': frob_parafac2, 'corr': corr_parafac2, 'acc': acc_parafac2,
-                          'time': t_parafac2, 'pvalues': p_parafac2},
+            {'iva': {'corr': corr_iva, 'pvalues': p_iva, 'time': t_iva},
+             'parafac2': {'corr': corr_parafac2, 'pvalues': p_parafac2, 'time': t_parafac2},
              'true': {'pvalues': p_true}
              })

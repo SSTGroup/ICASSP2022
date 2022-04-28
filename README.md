@@ -23,7 +23,7 @@ We recommend to run the code on a server or external PC because it has a long co
 The simulated data is generated with:
 
     cd ICASSP
-    python simulations.py @parameters.txt
+    python simulations.py @../simulations/simulation_parameters.txt
 
 After running the code, the folder *ICASSP2022/simulations* will contain the generated .npy files,
 consisting of the true data and the estimations by IVA and PARAFAC2, for each Monte-Carlo run.
@@ -32,7 +32,7 @@ Then, the performance metrics are calcuted with (from the ICASSP folder):
 
     python performance_metrics.py @../simulations/performance_parameters.txt
 
-They will also be saved in the *simulations* folder.
+The .npy files containing the performace metrics will also be saved in the *simulations* folder.
 
 ## Visualizing Results
 
